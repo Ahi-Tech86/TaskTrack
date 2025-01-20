@@ -1,0 +1,42 @@
+services:
+  auth_db:
+    image: postgres:15
+    container_name: auth_db
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: ${AUTH_DB_USER}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASS}
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_db_data:/var/lib
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADM_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADM_PASS}
+    ports:
+      - "5050:80"
+    depends_on:
+      - auth_db
+
+  redis:
+    image: redis:7.4
+    container_name: auth_cache
+    restart: "no"
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: redis-cli ping
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    volumes:
+      - auth_cache:/data
+
+volumes:
+  auth_cache:
+  auth_db_data:

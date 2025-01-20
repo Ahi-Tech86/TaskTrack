@@ -1,0 +1,8 @@
+# IDEA
+/.idea/
+
+# Gradle
+.gradle/
+
+# environment
+.env
