@@ -3,4 +3,5 @@ include 'service-registry'
 include 'service-gateway'
 include 'lib'
 include 'lib'
+include 'ms-authentication'
 

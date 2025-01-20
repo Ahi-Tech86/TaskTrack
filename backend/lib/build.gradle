@@ -6,7 +6,6 @@ plugins {
 ext {
     jjwtVersion = '0.11.5'
     junitVersion = '5.7.0'
-    dotenVersion = '5.2.2'
     mockitoVersion = '3.6.28'
 }
 
@@ -21,7 +20,6 @@ dependencies {
     implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
     implementation "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
     implementation "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
-    implementation "io.github.cdimascio:java-dotenv:${dotenVersion}"
 
     // Dependencies to test
     testImplementation "org.mockito:mockito-core:${mockitoVersion}"
