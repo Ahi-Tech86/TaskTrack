@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -39,6 +40,7 @@ public class RestExceptionHandler {
 
         ValidationErrorDto validationErrorDto = ValidationErrorDto.builder()
                 .message("Validation failed")
+                .timestamp(LocalDateTime.now())
                 .errors(errors)
                 .build();
 
