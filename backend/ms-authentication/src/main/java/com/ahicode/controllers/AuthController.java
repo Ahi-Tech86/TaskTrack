@@ -1,9 +1,6 @@
 package com.ahicode.controllers;
 
-import com.ahicode.dtos.ConfirmationRegisterRequest;
-import com.ahicode.dtos.SignInRequest;
-import com.ahicode.dtos.SignUpRequest;
-import com.ahicode.dtos.UserDto;
+import com.ahicode.dtos.*;
 import com.ahicode.services.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -68,11 +65,11 @@ public class AuthController {
             }
     )
     public ResponseEntity<UserDto> authenticateUser(HttpServletResponse response, @RequestBody SignInRequest signInRequest) {
-        List<Object> authenticatedUser = authService.login(signInRequest);
+        AuthResponse authenticatedUser = authService.login(signInRequest);
 
-        UserDto userDto = (UserDto) authenticatedUser.get(0);
-        String accessToken = (String) authenticatedUser.get(1);
-        String refreshToken = (String) authenticatedUser.get(2);
+        UserDto userDto = authenticatedUser.getUserDto();
+        String accessToken = authenticatedUser.getAccessToken();
+        String refreshToken = authenticatedUser.getRefreshToken();
 
         Cookie accessTokenCookie = new Cookie("accessToken", accessToken);
         accessTokenCookie.setHttpOnly(true);

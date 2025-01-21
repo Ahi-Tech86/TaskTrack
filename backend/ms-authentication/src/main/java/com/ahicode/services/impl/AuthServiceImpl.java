@@ -3,6 +3,7 @@ package com.ahicode.services.impl;
 import com.ahicode.dtos.*;
 import com.ahicode.enums.AppRole;
 import com.ahicode.exceptions.AppException;
+import com.ahicode.factories.AuthResponseFactory;
 import com.ahicode.factories.TemporaryUserDtoFactory;
 import com.ahicode.factories.UserDtoFactory;
 import com.ahicode.factories.UserEntityFactory;
@@ -22,11 +23,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -40,10 +41,15 @@ public class AuthServiceImpl implements AuthService {
     private final EmailService emailService;
     private final UserEntityFactory entityFactory;
     private final PasswordEncoder passwordEncoder;
+    private final AuthResponseFactory authResponseFactory;
     private final TemporaryUserDtoFactory temporaryUserDtoFactory;
 
     private final RedisTemplate<String, Integer> integerRedisTemplate;
     private final RedisTemplate<String, TemporaryUserDto> redisTemplate;
+
+    private static final Pattern EMAIL_PATTERN = Pattern.compile(
+            "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$"
+    );
 
     @Autowired
     public AuthServiceImpl(
@@ -54,6 +60,7 @@ public class AuthServiceImpl implements AuthService {
             EmailService emailService,
             UserEntityFactory entityFactory,
             PasswordEncoder passwordEncoder,
+            AuthResponseFactory authResponseFactory,
             TemporaryUserDtoFactory temporaryUserDtoFactory,
             @Qualifier("redisTemplate") RedisTemplate<String, TemporaryUserDto> redisTemplate,
             @Qualifier("integerRedisTemplate") RedisTemplate<String, Integer> integerRedisTemplate
@@ -65,6 +72,7 @@ public class AuthServiceImpl implements AuthService {
         this.emailService = emailService;
         this.entityFactory = entityFactory;
         this.passwordEncoder = passwordEncoder;
+        this.authResponseFactory = authResponseFactory;
         this.temporaryUserDtoFactory = temporaryUserDtoFactory;
         this.redisTemplate = redisTemplate;
         this.integerRedisTemplate = integerRedisTemplate;
@@ -122,8 +130,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public List<Object> login(SignInRequest signInRequest) {
-        List<Object> response = new ArrayList<>();
+    public AuthResponse login(SignInRequest signInRequest) {
         String email = signInRequest.getEmail();
 
         String failedLoginKey = "failedLogin:" + email;
@@ -150,9 +157,7 @@ public class AuthServiceImpl implements AuthService {
             String accessToken = jwtService.generateAccessToken(userId, nickname, role);
             String refreshToken = tokenService.getTokenByUserNickname(nickname);
 
-            response.add(userDto);
-            response.add(accessToken);
-            response.add(refreshToken);
+            AuthResponse response = authResponseFactory.makeAuthResponse(userDto, accessToken, refreshToken);
 
             log.info("Successful login to {} account", email);
             return response;
@@ -175,27 +180,18 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private boolean isEmailValid(String email) {
-        String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\."+
-                "[a-zA-Z0-9_+&*-]+)*@" +
-                "(?:[a-zA-Z0-9-]+\\.)+[a-z" +
-                "A-Z]{2,7}$";
-
-        Pattern pattern = Pattern.compile(emailRegex);
-
         if (email == null) {
             return false;
         }
 
-        return pattern.matcher(email).matches();
+        Matcher matcher = EMAIL_PATTERN.matcher(email);
+        return matcher.matches();
     }
 
     private void isEmailUniqueness(String email) {
-        Optional<UserEntity> optionalUser = repository.findByEmail(email);
-
-        if (optionalUser.isPresent()) {
-            log.error("Attempt to register with an existing email {}", email);
-            throw new AppException(String.format("User with email %s is already exists", email), HttpStatus.BAD_REQUEST);
-        }
+        checkUniqueness(
+                "email", email, repository::findByEmail, "User with email %s is already exists"
+        );
     }
 
     private boolean isLockedLogin(String lockKey) {
@@ -205,23 +201,19 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void isNicknameUniqueness(String nickname) {
-        Optional<UserEntity> optionalUser = repository.findByNickname(nickname);
-
-        if (optionalUser.isPresent()) {
-            log.error("Attempt to with an existing nickname {}", nickname);
-            throw new AppException(String.format("User with nickname %s is already exists", nickname), HttpStatus.BAD_REQUEST);
-        }
+        checkUniqueness(
+                "nickname", nickname,
+                repository::findByNickname, "User with nickname %s is already exists"
+        );
     }
 
     private UserEntity isUserExistsByEmail(String email) {
-        Optional<UserEntity> optionalUser = repository.findByEmail(email);
-
-        if (optionalUser.isPresent()) {
-            return optionalUser.get();
-        } else {
-            log.error("Attempt to log into an account with non-existent email {}", email);
-            throw new AppException(String.format("User with email %s doesn't exists", email), HttpStatus.NOT_FOUND);
-        }
+        return repository.findByEmail(email).orElseThrow(
+                () -> {
+                    log.error("Attempt to log into an account with non-existent email {}", email);
+                    throw new AppException(String.format("User with email %s doesn't exists", email), HttpStatus.NOT_FOUND);
+                }
+        );
     }
 
     private void handleFailedLogin(String failedLoginKey, String lockKey) {
@@ -238,18 +230,17 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    private UserEntity createUserEntity(TemporaryUserDto temporaryUserDto, boolean isAdmin) {
+        return isAdmin ? entityFactory.makeAdminUserEntity(temporaryUserDto) : entityFactory.makeAdminUserEntity(temporaryUserDto);
+    }
+
     private UserDto confirmUser(String email, String confirmationCode, TemporaryUserDto temporaryUserDto, boolean isAdmin) {
         if (!confirmationCode.equals(temporaryUserDto.getConfirmationCode())) {
             log.error("Attempting to activate an account with an incorrect confirmation code to email {}", email);
             throw new AppException("The confirmation code doesn't match what the server generated", HttpStatus.UNAUTHORIZED);
         }
 
-        UserEntity user;
-        if (!isAdmin) {
-            user = entityFactory.makeUserEntity(temporaryUserDto);
-        } else {
-            user = entityFactory.makeAdminUserEntity(temporaryUserDto);
-        }
+        UserEntity user = createUserEntity(temporaryUserDto, isAdmin);
 
         user.setPassword(passwordEncoder.encode(temporaryUserDto.getPassword()));
 
@@ -260,5 +251,17 @@ public class AuthServiceImpl implements AuthService {
         log.info("Refresh token for {} user was successfully saved", email);
 
         return dtoFactory.makeUserDto(savedUser);
+    }
+
+    private void checkUniqueness(
+            String varName, String value, Function<String, Optional<UserEntity>> findFunction, String errorMessage
+    ) {
+        findFunction.apply(value)
+                .ifPresent(
+                        user -> {
+                            log.error("Attempt to register with an existing {} {}", varName, value);
+                            throw new AppException(String.format(errorMessage, value), HttpStatus.BAD_REQUEST);
+                        }
+                );
     }
 }
