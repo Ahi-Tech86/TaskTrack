@@ -1,5 +1,6 @@
 package com.ahicode.config;
 
+import com.ahicode.services.MessageProducerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +20,7 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 public class SecurityConfig {
 
     private final UserAuthenticationProvider provider;
+    private final MessageProducerService messageService;
     private final UserAuthenticationEntryPoint entryPoint;
 
     @Bean
@@ -26,7 +28,7 @@ public class SecurityConfig {
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .addFilterBefore(new JwtAuthFilter(provider), BasicAuthenticationFilter.class)
+                .addFilterBefore(new JwtAuthFilter(provider, messageService), BasicAuthenticationFilter.class)
                 .exceptionHandling(exceptionHandling -> exceptionHandling
                         .authenticationEntryPoint(entryPoint)
                 )

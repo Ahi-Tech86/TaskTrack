@@ -147,7 +147,7 @@ public class JwtServiceImpl implements JwtService {
             return true;
         } catch (RuntimeException exception) {
             log.error("Attempt to validate token with wrong signed token {} with exception: {}", token, exception.getMessage());
-            throw new AppException("Token was incorrectly signed", HttpStatus.UNAUTHORIZED);
+            return false;
         }
     }
 

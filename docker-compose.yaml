@@ -1,3 +1,7 @@
+networks:
+  backend_network:
+    driver: bridge
+
 services:
   auth_db:
     image: postgres:15
@@ -37,6 +41,52 @@ services:
     volumes:
       - auth_cache:/data
 
+  tokens_blacklist:
+    image: redis:7.4
+    container_name: blacklist_set
+    restart: "no"
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: redis-cli ping
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    volumes:
+      - blacklist_cache:/data
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+    networks:
+      - backend_network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafkach
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafkach:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    depends_on:
+      - zookeeper
+    networks:
+      - backend_network
+
+
 volumes:
   auth_cache:
   auth_db_data:
+  blacklist_cache:

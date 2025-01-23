@@ -2,6 +2,7 @@ package com.ahicode.config;
 
 import com.ahicode.enums.AppRole;
 import com.ahicode.exceptions.AppException;
+import com.ahicode.services.MessageProducerService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -16,6 +17,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.WebUtils;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 
 @Slf4j
@@ -24,6 +26,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final int tokenMaxAge = 3600;
     private final UserAuthenticationProvider provider;
+    private final MessageProducerService messageService;
 
     private static final Set<String> ALLOWED_PATHS = Set.of(
             "/api/v1/auth/login",
@@ -79,6 +82,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String refreshToken
     ) {
         if (isTokenInvalid(refreshToken)) {
+            if (refreshToken != null) {
+                messageService.sendMessage(List.of(refreshToken));
+                log.info("An invalid refresh token was sent to the kafka topic");
+            }
+
             log.error("An attempt was made to gain access with an invalid refresh token or missing refresh token");
             throw new AppException("The refresh token was lost or is not valid", HttpStatus.UNAUTHORIZED);
         }
