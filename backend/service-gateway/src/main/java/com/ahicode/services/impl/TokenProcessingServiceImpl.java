@@ -2,7 +2,6 @@ package com.ahicode.services.impl;
 
 import com.ahicode.dtos.ProcessedToken;
 import com.ahicode.services.TokenProcessingService;
-import com.ahicode.services.TokenProcessor;
 import com.ahicode.services.TokenSetService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

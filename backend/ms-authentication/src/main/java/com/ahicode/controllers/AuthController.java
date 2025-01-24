@@ -2,12 +2,15 @@ package com.ahicode.controllers;
 
 import com.ahicode.dtos.*;
 import com.ahicode.services.AuthService;
+import com.ahicode.services.MessageProducerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -15,9 +18,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.WebUtils;
 
 import java.util.List;
 
+@Slf4j
 @Validated
 @RestController
 @RequiredArgsConstructor
@@ -25,6 +30,10 @@ import java.util.List;
 public class AuthController {
 
     private final AuthService authService;
+    private final MessageProducerService messageService;
+
+    private static final String ACCESS_TOKEN_COOKIE_NAME = "accessToken";
+    private static final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
 
     @PostMapping("/register")
     @Operation(
@@ -71,12 +80,12 @@ public class AuthController {
         String accessToken = authenticatedUser.getAccessToken();
         String refreshToken = authenticatedUser.getRefreshToken();
 
-        Cookie accessTokenCookie = new Cookie("accessToken", accessToken);
+        Cookie accessTokenCookie = new Cookie(ACCESS_TOKEN_COOKIE_NAME, accessToken);
         accessTokenCookie.setHttpOnly(true);
         accessTokenCookie.setPath("/");
         accessTokenCookie.setMaxAge(60 * 60);
 
-        Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
+        Cookie refreshTokenCookie = new Cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken);
         refreshTokenCookie.setHttpOnly(true);
         refreshTokenCookie.setPath("/");
         refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
@@ -95,9 +104,18 @@ public class AuthController {
                     @ApiResponse(responseCode = "204", description = "Successful logout")
             }
     )
-    public ResponseEntity<Void> logout(HttpServletResponse response) {
-        deleteCookie("accessToken", response);
-        deleteCookie("refreshToken", response);
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        String accessToken = extractCookieValue(ACCESS_TOKEN_COOKIE_NAME, request);
+        String refreshToken = extractCookieValue(REFRESH_TOKEN_COOKIE_NAME, request);
+
+        if (accessToken != null && refreshToken != null) {
+            messageService.sendMessage(List.of(accessToken, refreshToken));
+        } else {
+            log.error("Access token or refresh token not found in cookies");
+        }
+
+        deleteCookie(ACCESS_TOKEN_COOKIE_NAME, response);
+        deleteCookie(REFRESH_TOKEN_COOKIE_NAME, response);
 
         return ResponseEntity.noContent().build();
     }
@@ -107,5 +125,16 @@ public class AuthController {
         cookie.setMaxAge(0);
         cookie.setPath("/");
         response.addCookie(cookie);
+    }
+
+    private String extractCookieValue(String cookieName, HttpServletRequest request) {
+        Cookie cookie = WebUtils.getCookie(request, cookieName);
+
+        if (cookie != null) {
+            return cookie.getValue();
+        } else {
+            log.warn("Cookie {} not found in request", cookieName);
+            return null;
+        }
     }
 }
