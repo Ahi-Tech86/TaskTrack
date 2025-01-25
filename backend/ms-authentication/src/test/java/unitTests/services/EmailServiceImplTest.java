@@ -1,4 +1,4 @@
-package services;
+package unitTests.services;
 
 import com.ahicode.services.impl.EmailServiceImpl;
 import org.junit.jupiter.api.BeforeEach;

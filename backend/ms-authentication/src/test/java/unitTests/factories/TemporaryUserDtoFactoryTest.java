@@ -1,4 +1,4 @@
-package factories;
+package unitTests.factories;
 
 import com.ahicode.dtos.SignUpRequest;
 import com.ahicode.dtos.TemporaryUserDto;

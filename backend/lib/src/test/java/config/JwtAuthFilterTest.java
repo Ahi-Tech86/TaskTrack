@@ -3,6 +3,7 @@ package config;
 import com.ahicode.config.JwtAuthFilter;
 import com.ahicode.config.UserAuthenticationProvider;
 import com.ahicode.enums.AppRole;
+import com.ahicode.services.MessageProducerServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -22,11 +23,13 @@ import static org.mockito.Mockito.*;
 public class JwtAuthFilterTest {
     private JwtAuthFilter jwtAuthFilter;
     private UserAuthenticationProvider provider;
+    private MessageProducerServiceImpl messageProducerService;
 
     @BeforeEach
     void setup() {
         provider = Mockito.mock(UserAuthenticationProvider.class);
-        jwtAuthFilter = new JwtAuthFilter(provider);
+        messageProducerService = Mockito.mock(MessageProducerServiceImpl.class);
+        jwtAuthFilter = new JwtAuthFilter(provider, messageProducerService);
     }
 
     @Test

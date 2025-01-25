@@ -1,4 +1,4 @@
-package factories;
+package unitTests.factories;
 
 import com.ahicode.dtos.TemporaryUserDto;
 import com.ahicode.enums.AppRole;
