@@ -1,7 +1,6 @@
 package com.ahicode.services;
 
 import com.ahicode.enums.AppRole;
-import com.ahicode.exceptions.AppException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -10,12 +9,12 @@ import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.security.Key;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -180,6 +179,9 @@ public class JwtServiceImpl implements JwtService {
     }
 
     private String generateToken(String email, Long userId, AppRole role, Key signKey, Long expirationTime) {
+        Instant now = Instant.now();
+        long currentTimeMillis = now.toEpochMilli();
+
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", userId);
         claims.put("role", role.toString());
@@ -187,9 +189,9 @@ public class JwtServiceImpl implements JwtService {
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(email)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + expirationTime))
-                .signWith(SignatureAlgorithm.HS256, signKey)
+                .setIssuedAt(Date.from(now))
+                .setExpiration(new Date(currentTimeMillis + expirationTime))
+                .signWith(signKey, SignatureAlgorithm.HS256)
                 .compact();
     }
 }

@@ -155,7 +155,7 @@ public class AuthServiceImpl implements AuthService {
             UserDto userDto = dtoFactory.makeUserDto(user);
 
             String accessToken = jwtService.generateAccessToken(userId, nickname, role);
-            String refreshToken = tokenService.getTokenByUserNickname(nickname);
+            String refreshToken = jwtService.generateRefreshToken(userId, nickname, role);
 
             AuthResponse response = authResponseFactory.makeAuthResponse(userDto, accessToken, refreshToken);
 
@@ -231,7 +231,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private UserEntity createUserEntity(TemporaryUserDto temporaryUserDto, boolean isAdmin) {
-        return isAdmin ? entityFactory.makeAdminUserEntity(temporaryUserDto) : entityFactory.makeAdminUserEntity(temporaryUserDto);
+        return isAdmin ? entityFactory.makeAdminUserEntity(temporaryUserDto) : entityFactory.makeUserEntity(temporaryUserDto);
     }
 
     private UserDto confirmUser(String email, String confirmationCode, TemporaryUserDto temporaryUserDto, boolean isAdmin) {
