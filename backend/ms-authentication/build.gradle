@@ -54,6 +54,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation "io.rest-assured:rest-assured:${restAssuredVersion}"
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
     testImplementation "com.redis:testcontainers-redis:${redisTestContainerVersion}"
 }
