@@ -116,17 +116,7 @@ public class AuthServiceImpl implements AuthService {
         String confirmationCode = confirmationRegisterRequest.getConfirmationCode();
 
         TemporaryUserDto temporaryUserDto = redisTemplate.opsForValue().get(email);
-        return confirmUser(email, confirmationCode, temporaryUserDto, false);
-    }
-
-    @Override
-    @Transactional
-    public UserDto confirmAdmin(ConfirmationRegisterRequest confirmationRegisterRequest) {
-        String email = confirmationRegisterRequest.getEmail();
-        String confirmationCode = confirmationRegisterRequest.getConfirmationCode();
-
-        TemporaryUserDto temporaryUserDto = redisTemplate.opsForValue().get(email);
-        return confirmUser(email, confirmationCode, temporaryUserDto, true);
+        return confirmUser(email, confirmationCode, temporaryUserDto);
     }
 
     @Override
@@ -230,17 +220,13 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    private UserEntity createUserEntity(TemporaryUserDto temporaryUserDto, boolean isAdmin) {
-        return isAdmin ? entityFactory.makeAdminUserEntity(temporaryUserDto) : entityFactory.makeUserEntity(temporaryUserDto);
-    }
-
-    private UserDto confirmUser(String email, String confirmationCode, TemporaryUserDto temporaryUserDto, boolean isAdmin) {
+    private UserDto confirmUser(String email, String confirmationCode, TemporaryUserDto temporaryUserDto) {
         if (!confirmationCode.equals(temporaryUserDto.getConfirmationCode())) {
             log.error("Attempting to activate an account with an incorrect confirmation code to email {}", email);
             throw new AppException("The confirmation code doesn't match what the server generated", HttpStatus.UNAUTHORIZED);
         }
 
-        UserEntity user = createUserEntity(temporaryUserDto, isAdmin);
+        UserEntity user = entityFactory.makeUserEntity(temporaryUserDto);
 
         user.setPassword(passwordEncoder.encode(temporaryUserDto.getPassword()));
 
