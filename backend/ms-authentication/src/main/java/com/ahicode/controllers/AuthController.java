@@ -69,6 +69,7 @@ public class AuthController {
             description = "Login operation and JWT tokens saving",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Successful login operation"),
+                    @ApiResponse(responseCode = "400", description = "Operation has been blocked"),
                     @ApiResponse(responseCode = "401", description = "Password doesn't match with user password"),
                     @ApiResponse(responseCode = "404", description = "User with email doesn't exists")
             }

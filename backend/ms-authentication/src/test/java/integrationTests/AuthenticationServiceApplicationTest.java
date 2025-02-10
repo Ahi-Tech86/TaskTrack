@@ -2,17 +2,21 @@ package integrationTests;
 
 import com.ahicode.AuthenticationServiceRunner;
 import com.ahicode.dtos.ConfirmationRegisterRequest;
+import com.ahicode.dtos.SignInRequest;
 import com.ahicode.dtos.SignUpRequest;
 import com.ahicode.dtos.TemporaryUserDto;
 import com.ahicode.enums.AppRole;
 import com.ahicode.exceptions.AppException;
 import com.ahicode.services.EmailService;
 import com.ahicode.services.EncryptionService;
+import com.ahicode.services.JwtService;
 import com.ahicode.storage.entities.UserEntity;
 import com.ahicode.storage.repositories.UserRepository;
 import com.redis.testcontainers.RedisContainer;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.restassured.RestAssured;
+import io.restassured.http.Cookie;
+import io.restassured.response.Response;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,8 +26,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.time.Instant;
@@ -49,9 +53,23 @@ public class AuthenticationServiceApplicationTest {
     private EncryptionService encryptionService;
 
     @Autowired
+    private JwtService jwtService;
+    @Autowired
     private UserRepository userRepository;
     @Autowired
+    private PasswordEncoder passwordEncoder;
+    @Autowired
     private RedisTemplate<String, TemporaryUserDto> redisTemplate;
+    @Autowired
+    private RedisTemplate<String, Integer> integerRedisTemplate;
+
+    @BeforeEach
+    void setup() {
+        RestAssured.baseURI = "http://localhost";
+        RestAssured.port = port;
+
+        userRepository.deleteAll();
+    }
 
     @BeforeAll
     static void setupAll() {
@@ -68,12 +86,10 @@ public class AuthenticationServiceApplicationTest {
         psqlContainer.start();
     }
 
-    @BeforeEach
-    void setup() {
-        RestAssured.baseURI = "http://localhost";
-        RestAssured.port = port;
-
-        userRepository.deleteAll();
+    @AfterEach
+    void tearDown() {
+        String lockKey = "locked:non-existent@mail.com";
+        integerRedisTemplate.delete(lockKey);
     }
 
     @Nested
@@ -182,6 +198,16 @@ public class AuthenticationServiceApplicationTest {
                     .log().all()
                     .statusCode(500);
         }
+
+        private SignUpRequest getSignUpRequest() {
+            return SignUpRequest.builder()
+                    .email("example@mail.com")
+                    .nickname("nick19")
+                    .firstname("Firstname")
+                    .lastname("Lastname")
+                    .password("password")
+                    .build();
+        }
     }
 
     @Nested
@@ -249,33 +275,178 @@ public class AuthenticationServiceApplicationTest {
                     .log().all()
                     .statusCode(500);
         }
+
+        private TemporaryUserDto getTemporaryUserDto() {
+            return TemporaryUserDto.builder()
+                    .email("test@mail.com")
+                    .nickname("nick")
+                    .firstname("firstname")
+                    .lastname("lastname")
+                    .password("1")
+                    .confirmationCode("123456")
+                    .build();
+        }
+
+        private ConfirmationRegisterRequest getConfirmationRegisterRequest() {
+            return ConfirmationRegisterRequest.builder()
+                    .email("test@mail.com")
+                    .confirmationCode("123456")
+                    .build();
+        }
     }
 
-    private SignUpRequest getSignUpRequest() {
-        return SignUpRequest.builder()
-                .email("example@mail.com")
-                .nickname("nick19")
-                .firstname("Firstname")
-                .lastname("Lastname")
-                .password("password")
-                .build();
+    @Nested
+    @DisplayName("Tests for login operation endpoint")
+    class LoginTests {
+        private final String ACCESS_TOKEN_COOKIE_NAME = "accessToken";
+        private final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
+
+        @Test
+        void should_Return_200_And_Log_In_Successfully() {
+            UserEntity user = getUserEntity();
+            userRepository.save(user);
+
+            SignInRequest requestBody = getSignInRequest();
+
+            Response response = RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .post("/api/v1/auth/login")
+                    .then()
+                    .log().all()
+                    .statusCode(200)
+                    .body("email", equalTo(user.getEmail()))
+                    .body("nickname", equalTo(user.getNickname()))
+                    .body("firstname", equalTo(user.getFirstname()))
+                    .body("lastname", equalTo(user.getLastname()))
+                    .extract().response();
+
+            String accessTokenCookie = response.getCookie(ACCESS_TOKEN_COOKIE_NAME);
+            String refreshTokenCookie = response.getCookie(REFRESH_TOKEN_COOKIE_NAME);
+
+            Assertions.assertNotNull(accessTokenCookie);
+            Assertions.assertNotNull(refreshTokenCookie);
+
+            Assertions.assertEquals("/", response.getDetailedCookie(ACCESS_TOKEN_COOKIE_NAME).getPath());
+            Assertions.assertEquals("/", response.getDetailedCookie(REFRESH_TOKEN_COOKIE_NAME).getPath());
+            Assertions.assertTrue(response.getDetailedCookie(ACCESS_TOKEN_COOKIE_NAME).getMaxAge() > 0);
+            Assertions.assertTrue(response.getDetailedCookie(REFRESH_TOKEN_COOKIE_NAME).getMaxAge() > 0);
+        }
+
+        @Test
+        void should_Return_400_For_Locked_Log_In() {
+            UserEntity user = getUserEntity();
+            userRepository.save(user);
+
+            SignInRequest requestBody = getSignInRequest();
+            requestBody.setEmail("non-existent@mail.com");
+
+            String lockKey = "locked:" + requestBody.getEmail();
+            integerRedisTemplate.opsForValue().set(lockKey, 2, 5, TimeUnit.MINUTES);
+
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .post("/api/v1/auth/login")
+                    .then()
+                    .log().all()
+                    .statusCode(400)
+                    .body("message", equalTo("Due to an incorrect password entry, we have temporarily " +
+                            "blocked you from logging into your account. Come back later")
+                    );
+        }
+
+        @Test
+        void should_Return_401_For_Wrong_Password() {
+            UserEntity user = getUserEntity();
+            userRepository.save(user);
+
+            SignInRequest requestBody = getSignInRequest();
+            requestBody.setPassword("invalid-password");
+
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .post("/api/v1/auth/login")
+                    .then()
+                    .log().all()
+                    .statusCode(401)
+                    .body("message", equalTo("Incorrect password"));
+        }
+
+        @Test
+        void should_Return_404_For_Non_Existent_Email() {
+            UserEntity user = getUserEntity();
+            userRepository.save(user);
+
+            SignInRequest requestBody = getSignInRequest();
+            requestBody.setEmail("non-existent@mail.com");
+
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .post("/api/v1/auth/login")
+                    .then()
+                    .log().all()
+                    .statusCode(404)
+                    .body(
+                            "message",
+                            equalTo(String.format("User with email %s doesn't exists", requestBody.getEmail()))
+                    );
+        }
+
+        private UserEntity getUserEntity() {
+            return UserEntity.builder()
+                    .id(1L)
+                    .email("test@mail.com")
+                    .nickname("nick")
+                    .firstname("firstname")
+                    .lastname("lastname")
+                    .createAt(Instant.now())
+                    .password(passwordEncoder.encode("password"))
+                    .role(AppRole.USER)
+                    .build();
+        }
+
+        private SignInRequest getSignInRequest() {
+            return SignInRequest.builder()
+                    .email("test@mail.com")
+                    .password("password")
+                    .build();
+        }
     }
 
-    private TemporaryUserDto getTemporaryUserDto() {
-        return TemporaryUserDto.builder()
-                .email("test@mail.com")
-                .nickname("nick")
-                .firstname("firstname")
-                .lastname("lastname")
-                .password("1")
-                .confirmationCode("123456")
-                .build();
-    }
+    @Nested
+    @DisplayName("Tests for logout operation endpoint")
+    class LogoutTests {
+        @Test
+        void should_Return_204_And_Successful_Logout() {
+            Long userId = 1L;
+            String email = "test@mail.com";
+            AppRole userRole = AppRole.USER;
+            String accessToken = jwtService.generateAccessToken(userId, email, userRole);
+            String refreshToken = jwtService.generateRefreshToken(userId, email, userRole);
 
-    private ConfirmationRegisterRequest getConfirmationRegisterRequest() {
-        return ConfirmationRegisterRequest.builder()
-                .email("test@mail.com")
-                .confirmationCode("123456")
-                .build();
+            Cookie accessTokenCookie = new Cookie.Builder("accessToken", accessToken)
+                    .setHttpOnly(true)
+                    .setPath("/")
+                    .setMaxAge(60 * 60)
+                    .build();
+
+            Cookie refreshTokenCookie = new Cookie.Builder("refreshToken", refreshToken)
+                    .setHttpOnly(true)
+                    .setPath("/")
+                    .setMaxAge(7 * 24 * 60 * 60)
+                    .build();
+
+            RestAssured.given()
+                    .contentType("application/json")
+                    .cookie(accessTokenCookie)
+                    .cookie(refreshTokenCookie)
+                    .post("/api/v1/auth/logout")
+                    .then()
+                    .log().all()
+                    .statusCode(204);
+        }
     }
 }
