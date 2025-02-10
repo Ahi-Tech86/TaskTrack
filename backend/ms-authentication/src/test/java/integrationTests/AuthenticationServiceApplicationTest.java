@@ -13,17 +13,17 @@ import com.ahicode.storage.repositories.UserRepository;
 import com.redis.testcontainers.RedisContainer;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.restassured.RestAssured;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.time.Instant;
@@ -43,15 +43,15 @@ public class AuthenticationServiceApplicationTest {
     @ServiceConnection
     static PostgreSQLContainer psqlContainer = new PostgreSQLContainer("postgres:15");
 
+    @MockBean
+    private EmailService emailService;
+    @SpyBean
+    private EncryptionService encryptionService;
+
     @Autowired
     private UserRepository userRepository;
     @Autowired
     private RedisTemplate<String, TemporaryUserDto> redisTemplate;
-
-    @MockBean
-    private EmailService emailService;
-    @MockBean
-    private EncryptionService encryptionService;
 
     @BeforeAll
     static void setupAll() {
@@ -76,174 +76,179 @@ public class AuthenticationServiceApplicationTest {
         userRepository.deleteAll();
     }
 
-    static {
+    @Nested
+    @DisplayName("Tests for registration endpoint")
+    class RegistrationTests {
+        @Test
+        void should_Return_200_And_Register_Successfully() {
+            SignUpRequest requestBody = getSignUpRequest();
+
+            String expectedResponseBody = "An activation code has been sent to your email, please send the activation code " +
+                    "before it expires. The activation code expires in 20 minutes.";
+
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .when()
+                    .post("/api/v1/auth/register")
+                    .then()
+                    .log().all()
+                    .statusCode(200)
+                    .body(equalTo(expectedResponseBody));
+        }
+
+        @Test
+        void should_Return_400_For_Invalid_Email() {
+            SignUpRequest requestBody = getSignUpRequest();
+            requestBody.setEmail("invalid-email.com");
+
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .when()
+                    .post("/api/v1/auth/register")
+                    .then()
+                    .log().all()
+                    .statusCode(400);
+        }
+
+        @Test
+        void should_Return_400_For_Not_Unique_Nickname() {
+            UserEntity user = UserEntity.builder()
+                    .id(1L)
+                    .email("example-test@mail.com")
+                    .nickname("nick19")
+                    .firstname("Firstname")
+                    .lastname("Lastname")
+                    .role(AppRole.USER)
+                    .createAt(Instant.now())
+                    .password("password")
+                    .build();
+            userRepository.save(user);
+
+            SignUpRequest requestBody = getSignUpRequest();
+
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .when()
+                    .post("/api/v1/auth/register")
+                    .then()
+                    .log().all()
+                    .statusCode(400)
+                    .body("message", equalTo("User with nickname nick19 is already exists"));
+        }
+
+        @Test
+        void should_Return_400_For_Not_Unique_Email() {
+            UserEntity user = UserEntity.builder()
+                    .id(1L)
+                    .email("example@mail.com")
+                    .nickname("nick1")
+                    .firstname("Firstname")
+                    .lastname("Lastname")
+                    .role(AppRole.USER)
+                    .createAt(Instant.now())
+                    .password("password")
+                    .build();
+            userRepository.save(user);
+
+            SignUpRequest requestBody = getSignUpRequest();
+
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .when()
+                    .post("/api/v1/auth/register")
+                    .then()
+                    .log().all()
+                    .statusCode(400)
+                    .body("message", equalTo("User with email example@mail.com is already exists"));
+        }
+
+        @Test
+        void should_Return_500_For_Email_Sending_Error() {
+            SignUpRequest requestBody = getSignUpRequest();
+
+            doThrow(new RuntimeException("Email sending failed"))
+                    .when(emailService).sendConfirmationCode(anyString(), anyString());
+
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .when()
+                    .post("/api/v1/auth/register")
+                    .then()
+                    .log().all()
+                    .statusCode(500);
+        }
     }
 
-    @Test
-    void should_Return_200_And_Register_Successfully() {
-        SignUpRequest requestBody = getSignUpRequest();
+    @Nested
+    @DisplayName("Tests for confirmation registration endpoint")
+    class ConfirmationTests {
+        @Test
+        void should_Return_201_And_Confirm_Registration_Successfully() {
+            TemporaryUserDto userDto = getTemporaryUserDto();
+            String email = userDto.getEmail();
+            redisTemplate.opsForValue().set(email, userDto, 3, TimeUnit.MINUTES);
 
-        String expectedResponseBody = "An activation code has been sent to your email, please send the activation code " +
-                "before it expires. The activation code expires in 20 minutes.";
+            ConfirmationRegisterRequest requestBody = getConfirmationRegisterRequest();
 
-        RestAssured.given()
-                .contentType("application/json")
-                .body(requestBody)
-                .when()
-                .post("/api/v1/auth/register")
-                .then()
-                .log().all()
-                .statusCode(200)
-                .body(equalTo(expectedResponseBody));
-    }
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .when()
+                    .post("/api/v1/auth/confirmRegister")
+                    .then()
+                    .log().all()
+                    .statusCode(201)
+                    .body("email", equalTo(userDto.getEmail()))
+                    .body("nickname", equalTo(userDto.getNickname()))
+                    .body("firstname", equalTo(userDto.getFirstname()))
+                    .body("lastname", equalTo(userDto.getLastname()));
+        }
 
-    @Test
-    void should_Return_400_For_Invalid_Email() {
-        SignUpRequest requestBody = getSignUpRequest();
-        requestBody.setEmail("invalid-email.com");
+        @Test
+        void should_Return_401_Because_Confirmation_Code_Didnot_Matches() {
+            TemporaryUserDto userDto = getTemporaryUserDto();
+            String email = userDto.getEmail();
+            redisTemplate.opsForValue().set(email, userDto, 3, TimeUnit.MINUTES);
 
-        RestAssured.given()
-                .contentType("application/json")
-                .body(requestBody)
-                .when()
-                .post("/api/v1/auth/register")
-                .then()
-                .log().all()
-                .statusCode(400);
-    }
+            ConfirmationRegisterRequest requestBody = getConfirmationRegisterRequest();
+            requestBody.setConfirmationCode("654321");
 
-    @Test
-    void should_Return_400_For_Not_Unique_Nickname() {
-        UserEntity user = UserEntity.builder()
-                .id(1L)
-                .email("example-test@mail.com")
-                .nickname("nick19")
-                .firstname("Firstname")
-                .lastname("Lastname")
-                .role(AppRole.USER)
-                .createAt(Instant.now())
-                .password("password")
-                .build();
-        userRepository.save(user);
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .when()
+                    .post("/api/v1/auth/confirmRegister")
+                    .then()
+                    .log().all()
+                    .statusCode(401)
+                    .body("message", equalTo("The confirmation code doesn't match what the server generated"));
+        }
 
-        SignUpRequest requestBody = getSignUpRequest();
+        @Test
+        void should_Return_500_For_Serializing_Problems() {
+            doThrow(new AppException("An error occurred while encrypting data", HttpStatus.INTERNAL_SERVER_ERROR))
+                    .when(encryptionService).encrypt(anyString());
 
-        RestAssured.given()
-                .contentType("application/json")
-                .body(requestBody)
-                .when()
-                .post("/api/v1/auth/register")
-                .then()
-                .log().all()
-                .statusCode(400)
-                .body("message", equalTo("User with nickname nick19 is already exists"));
-    }
+            TemporaryUserDto userDto = getTemporaryUserDto();
+            String email = userDto.getEmail();
+            redisTemplate.opsForValue().set(email, userDto, 3, TimeUnit.MINUTES);
 
-    @Test
-    void should_Return_400_For_Not_Unique_Email() {
-        UserEntity user = UserEntity.builder()
-                .id(1L)
-                .email("example@mail.com")
-                .nickname("nick1")
-                .firstname("Firstname")
-                .lastname("Lastname")
-                .role(AppRole.USER)
-                .createAt(Instant.now())
-                .password("password")
-                .build();
-        userRepository.save(user);
+            ConfirmationRegisterRequest requestBody = getConfirmationRegisterRequest();
 
-        SignUpRequest requestBody = getSignUpRequest();
-
-        RestAssured.given()
-                .contentType("application/json")
-                .body(requestBody)
-                .when()
-                .post("/api/v1/auth/register")
-                .then()
-                .log().all()
-                .statusCode(400)
-                .body("message", equalTo("User with email example@mail.com is already exists"));
-    }
-
-    @Test
-    void should_Return_500_For_Email_Sending_Error() {
-        SignUpRequest requestBody = getSignUpRequest();
-
-        doThrow(new RuntimeException("Email sending failed"))
-                .when(emailService).sendConfirmationCode(anyString(), anyString());
-
-        RestAssured.given()
-                .contentType("application/json")
-                .body(requestBody)
-                .when()
-                .post("/api/v1/auth/register")
-                .then()
-                .log().all()
-                .statusCode(500);
-    }
-
-    @Test
-    void should_Return_201_And_Confirm_Registration_Successfully() {
-        TemporaryUserDto userDto = getTemporaryUserDto();
-        String email = userDto.getEmail();
-        redisTemplate.opsForValue().set(email, userDto, 3, TimeUnit.MINUTES);
-
-        ConfirmationRegisterRequest requestBody = getConfirmationRegisterRequest();
-
-        RestAssured.given()
-                .contentType("application/json")
-                .body(requestBody)
-                .when()
-                .post("/api/v1/auth/confirmRegister")
-                .then()
-                .log().all()
-                .statusCode(201)
-                .body("email", equalTo(userDto.getEmail()))
-                .body("nickname", equalTo(userDto.getNickname()))
-                .body("firstname", equalTo(userDto.getFirstname()))
-                .body("lastname", equalTo(userDto.getLastname()));
-    }
-
-    @Test
-    void should_Return_401_Because_Confirmation_Code_Didnot_Matches() {
-        TemporaryUserDto userDto = getTemporaryUserDto();
-        String email = userDto.getEmail();
-        redisTemplate.opsForValue().set(email, userDto, 3, TimeUnit.MINUTES);
-
-        ConfirmationRegisterRequest requestBody = getConfirmationRegisterRequest();
-        requestBody.setConfirmationCode("654321");
-
-        RestAssured.given()
-                .contentType("application/json")
-                .body(requestBody)
-                .when()
-                .post("/api/v1/auth/confirmRegister")
-                .then()
-                .log().all()
-                .statusCode(401)
-                .body("message", equalTo("The confirmation code doesn't match what the server generated"));
-    }
-
-    @Test
-    void should_Return_500_For_Serializing_Problems() {
-        TemporaryUserDto userDto = getTemporaryUserDto();
-        String email = userDto.getEmail();
-        redisTemplate.opsForValue().set(email, userDto, 3, TimeUnit.MINUTES);
-
-        ConfirmationRegisterRequest requestBody = getConfirmationRegisterRequest();
-
-        doThrow(new AppException("An error occurred while encrypting data", HttpStatus.INTERNAL_SERVER_ERROR))
-                .when(encryptionService).encrypt(anyString());
-
-        RestAssured.given()
-                .contentType("application/json")
-                .body(requestBody)
-                .when()
-                .post("/api/v1/auth/confirmRegister")
-                .then()
-                .log().all()
-                .statusCode(500);
+            RestAssured.given()
+                    .contentType("application/json")
+                    .body(requestBody)
+                    .when()
+                    .post("/api/v1/auth/confirmRegister")
+                    .then()
+                    .log().all()
+                    .statusCode(500);
+        }
     }
 
     private SignUpRequest getSignUpRequest() {
