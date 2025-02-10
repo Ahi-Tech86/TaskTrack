@@ -1,7 +1,6 @@
 package com.ahicode.config;
 
 import com.ahicode.services.TokenSetService;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.http.HttpStatus;
