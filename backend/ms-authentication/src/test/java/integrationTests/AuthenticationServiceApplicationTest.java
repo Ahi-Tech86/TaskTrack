@@ -1,14 +1,19 @@
 package integrationTests;
 
 import com.ahicode.AuthenticationServiceRunner;
+import com.ahicode.dtos.ConfirmationRegisterRequest;
 import com.ahicode.dtos.SignUpRequest;
+import com.ahicode.dtos.TemporaryUserDto;
 import com.ahicode.enums.AppRole;
+import com.ahicode.exceptions.AppException;
 import com.ahicode.services.EmailService;
+import com.ahicode.services.EncryptionService;
 import com.ahicode.storage.entities.UserEntity;
 import com.ahicode.storage.repositories.UserRepository;
 import com.redis.testcontainers.RedisContainer;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.restassured.RestAssured;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,10 +21,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ContextConfiguration;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.time.Instant;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.equalTo;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -37,18 +45,16 @@ public class AuthenticationServiceApplicationTest {
 
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private RedisTemplate<String, TemporaryUserDto> redisTemplate;
+
     @MockBean
     private EmailService emailService;
+    @MockBean
+    private EncryptionService encryptionService;
 
-    @BeforeEach
-    void setup() {
-        RestAssured.baseURI = "http://localhost";
-        RestAssured.port = port;
-
-        userRepository.deleteAll();
-    }
-
-    static {
+    @BeforeAll
+    static void setupAll() {
         String dotenvPath = "../../.env";
 
         Dotenv dotenv = Dotenv.configure()
@@ -62,8 +68,19 @@ public class AuthenticationServiceApplicationTest {
         psqlContainer.start();
     }
 
+    @BeforeEach
+    void setup() {
+        RestAssured.baseURI = "http://localhost";
+        RestAssured.port = port;
+
+        userRepository.deleteAll();
+    }
+
+    static {
+    }
+
     @Test
-    void should_Return_200_And_Register_Successfully() throws Exception {
+    void should_Return_200_And_Register_Successfully() {
         SignUpRequest requestBody = getSignUpRequest();
 
         String expectedResponseBody = "An activation code has been sent to your email, please send the activation code " +
@@ -166,6 +183,69 @@ public class AuthenticationServiceApplicationTest {
                 .statusCode(500);
     }
 
+    @Test
+    void should_Return_201_And_Confirm_Registration_Successfully() {
+        TemporaryUserDto userDto = getTemporaryUserDto();
+        String email = userDto.getEmail();
+        redisTemplate.opsForValue().set(email, userDto, 3, TimeUnit.MINUTES);
+
+        ConfirmationRegisterRequest requestBody = getConfirmationRegisterRequest();
+
+        RestAssured.given()
+                .contentType("application/json")
+                .body(requestBody)
+                .when()
+                .post("/api/v1/auth/confirmRegister")
+                .then()
+                .log().all()
+                .statusCode(201)
+                .body("email", equalTo(userDto.getEmail()))
+                .body("nickname", equalTo(userDto.getNickname()))
+                .body("firstname", equalTo(userDto.getFirstname()))
+                .body("lastname", equalTo(userDto.getLastname()));
+    }
+
+    @Test
+    void should_Return_401_Because_Confirmation_Code_Didnot_Matches() {
+        TemporaryUserDto userDto = getTemporaryUserDto();
+        String email = userDto.getEmail();
+        redisTemplate.opsForValue().set(email, userDto, 3, TimeUnit.MINUTES);
+
+        ConfirmationRegisterRequest requestBody = getConfirmationRegisterRequest();
+        requestBody.setConfirmationCode("654321");
+
+        RestAssured.given()
+                .contentType("application/json")
+                .body(requestBody)
+                .when()
+                .post("/api/v1/auth/confirmRegister")
+                .then()
+                .log().all()
+                .statusCode(401)
+                .body("message", equalTo("The confirmation code doesn't match what the server generated"));
+    }
+
+    @Test
+    void should_Return_500_For_Serializing_Problems() {
+        TemporaryUserDto userDto = getTemporaryUserDto();
+        String email = userDto.getEmail();
+        redisTemplate.opsForValue().set(email, userDto, 3, TimeUnit.MINUTES);
+
+        ConfirmationRegisterRequest requestBody = getConfirmationRegisterRequest();
+
+        doThrow(new AppException("An error occurred while encrypting data", HttpStatus.INTERNAL_SERVER_ERROR))
+                .when(encryptionService).encrypt(anyString());
+
+        RestAssured.given()
+                .contentType("application/json")
+                .body(requestBody)
+                .when()
+                .post("/api/v1/auth/confirmRegister")
+                .then()
+                .log().all()
+                .statusCode(500);
+    }
+
     private SignUpRequest getSignUpRequest() {
         return SignUpRequest.builder()
                 .email("example@mail.com")
@@ -173,6 +253,24 @@ public class AuthenticationServiceApplicationTest {
                 .firstname("Firstname")
                 .lastname("Lastname")
                 .password("password")
+                .build();
+    }
+
+    private TemporaryUserDto getTemporaryUserDto() {
+        return TemporaryUserDto.builder()
+                .email("test@mail.com")
+                .nickname("nick")
+                .firstname("firstname")
+                .lastname("lastname")
+                .password("1")
+                .confirmationCode("123456")
+                .build();
+    }
+
+    private ConfirmationRegisterRequest getConfirmationRegisterRequest() {
+        return ConfirmationRegisterRequest.builder()
+                .email("test@mail.com")
+                .confirmationCode("123456")
                 .build();
     }
 }
