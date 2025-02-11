@@ -12,6 +12,8 @@ public class GatewayRoutingConfig {
 
     @Value("${authentication.service.url}")
     private String authServiceUrl;
+    @Value("${project.service.url}")
+    private String projectServiceUrl;
 
     @Autowired
     private AuthenticationFilter filter;
@@ -24,6 +26,12 @@ public class GatewayRoutingConfig {
                                 .path("/api/v1/auth/**")
                                 .filters(f -> f.filter(filter.apply(new AuthenticationFilter.Config())))
                                 .uri("lb://AUTH-SERVICE")
+                )
+                .route("project_service",
+                        route -> route
+                                .path("/api/v1/project/**")
+                                .filters(f -> f.filter(filter.apply(new AuthenticationFilter.Config())))
+                                .uri("lb://PROJECT-SERVICE")
                 )
                 .build();
     }
