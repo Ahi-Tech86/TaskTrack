@@ -50,15 +50,13 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             String refreshToken = null;
 
             if (accessToken == null) {
-                accessToken = exchange.getRequest().getCookies().getFirst("accessToken").getValue();
                 refreshToken = exchange.getRequest().getCookies().getFirst("refreshToken").getValue();
             }
 
             if (accessToken != null && refreshToken != null) {
-                boolean isAccessTokenInBlacklist = tokenSetService.isTokenInBlackList(accessToken);
                 boolean isRefreshTokenInBlacklist = tokenSetService.isTokenInBlackList(refreshToken);
 
-                if (isAccessTokenInBlacklist || isRefreshTokenInBlacklist) {
+                if (isRefreshTokenInBlacklist) {
                     exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                     return exchange.getResponse().setComplete();
                 }

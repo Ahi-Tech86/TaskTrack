@@ -16,7 +16,8 @@ import java.time.Instant;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProjectCreationRequestDto {
+public class ProjectUpdateRequestDto {
+
     @NotBlank(message = "Project name is mandatory")
     @Size(min = 3, max = 50, message = "Project name must be between 3 and 50 characters")
     @Schema(description = "Project name", example = "My project")

@@ -1,6 +1,8 @@
 package com.ahicode.controllers;
 
 import com.ahicode.dtos.ProjectCreationRequestDto;
+import com.ahicode.dtos.ProjectDto;
+import com.ahicode.dtos.ProjectUpdateRequestDto;
 import com.ahicode.services.JwtService;
 import com.ahicode.services.ProjectService;
 import jakarta.servlet.http.Cookie;
@@ -8,12 +10,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.WebUtils;
 
 @Slf4j
@@ -27,10 +27,15 @@ public class ProjectController {
     private final ProjectService service;
 
     @PostMapping("/create")
-    public ResponseEntity<?> createProject(HttpServletRequest request, @Valid @RequestBody ProjectCreationRequestDto requestDto) {
+    public ResponseEntity<ProjectDto> createProject(HttpServletRequest request, @Valid @RequestBody ProjectCreationRequestDto requestDto) {
         String accessToken = extractCookieValue(request, "accessToken");
         Long userId = jwtService.extractUserIdFromAccessToken(accessToken);
-        return ResponseEntity.ok(service.createProject(requestDto, userId));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createProject(requestDto, userId));
+    }
+
+    @PatchMapping("/{projectId}/update")
+    public ResponseEntity<ProjectDto> updateProject(@PathVariable Long projectId, @Valid @RequestBody ProjectUpdateRequestDto requestDto) {
+        return ResponseEntity.ok(service.updateProjectInfo(projectId, requestDto));
     }
 
     private String extractCookieValue(HttpServletRequest request, String cookieName) {
