@@ -3,6 +3,7 @@ package com.ahicode.storage.entities;
 import com.ahicode.storage.enums.ProjectRole;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.time.Instant;
@@ -22,6 +23,11 @@ public class ProjectMemberEntity {
     @NotNull
     @Column(name = "user_id")
     private Long userId;
+
+    @NotNull
+    @Size(min = 3, max = 50)
+    @Column(name = "nickname")
+    private String userNickname;
 
     @NotNull
     @Column(name = "project_id")

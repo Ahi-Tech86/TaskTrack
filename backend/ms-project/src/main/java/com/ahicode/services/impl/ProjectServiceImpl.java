@@ -32,13 +32,13 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public ProjectDto createProject(ProjectCreationRequestDto requestDto, Long userId) {
+    public ProjectDto createProject(ProjectCreationRequestDto requestDto, Long userId, String userNickname) {
         ProjectEntity project = entityFactory.makeProjectEntity(requestDto, userId);
 
         ProjectEntity savedProject = repository.save(project);
         log.info("Project saved with ID: {}", savedProject.getId());
         ProjectMemberEntity projectMember = memberEntityFactory.makeProjectMemberEntity(
-                savedProject, ProjectRole.PROJECT_MANAGER
+                savedProject, ProjectRole.PROJECT_MANAGER, userNickname
         );
         memberRepository.save(projectMember);
         log.info("Project member created with ID: {}", projectMember.getId());

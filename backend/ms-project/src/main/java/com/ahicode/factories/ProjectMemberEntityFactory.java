@@ -10,9 +10,10 @@ import java.time.Instant;
 @Component
 public class ProjectMemberEntityFactory {
 
-    public ProjectMemberEntity makeProjectMemberEntity(ProjectEntity entity, ProjectRole role) {
+    public ProjectMemberEntity makeProjectMemberEntity(ProjectEntity entity, ProjectRole role, String userNickname) {
         return ProjectMemberEntity.builder()
                 .userId(entity.getOwnerId())
+                .userNickname(userNickname)
                 .projectId(entity.getId())
                 .role(role)
                 .joinedAt(Instant.now())

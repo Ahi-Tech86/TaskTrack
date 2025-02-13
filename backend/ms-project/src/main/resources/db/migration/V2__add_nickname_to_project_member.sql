@@ -1,0 +1,2 @@
+ALTER TABLE project_memb
+ADD COLUMN nickname VARCHAR(50) NOT NULL;

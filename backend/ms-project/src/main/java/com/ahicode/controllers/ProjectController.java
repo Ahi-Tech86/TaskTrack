@@ -29,8 +29,11 @@ public class ProjectController {
     @PostMapping("/create")
     public ResponseEntity<ProjectDto> createProject(HttpServletRequest request, @Valid @RequestBody ProjectCreationRequestDto requestDto) {
         String accessToken = extractCookieValue(request, "accessToken");
+
         Long userId = jwtService.extractUserIdFromAccessToken(accessToken);
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createProject(requestDto, userId));
+        String userNickname = jwtService.extractEmailFromAccessToken(accessToken);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createProject(requestDto, userId, userNickname));
     }
 
     @PatchMapping("/{projectId}/update")
