@@ -13,11 +13,16 @@ import com.ahicode.storage.entities.ProjectMemberEntity;
 import com.ahicode.storage.enums.ProjectRole;
 import com.ahicode.storage.repositories.ProjectMemberRepository;
 import com.ahicode.storage.repositories.ProjectRepository;
+import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -67,6 +72,22 @@ public class ProjectServiceImpl implements ProjectService {
         log.info("Project info with id {} was updated", projectId);
 
         return dtoFactory.makeProjectDto(updatedProject);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProjectDto> getAllProjects(Long userId) {
+        List<Tuple> tuples = memberRepository.getAllProjectsByUserId(userId);
+
+        return tuples.stream()
+                .map(tuple -> ProjectDto.builder()
+                        .name(tuple.get("name", String.class))
+                        .description(tuple.get("description", String.class))
+                        .createAt(tuple.get("create_at", Instant.class))
+                        .startDate(tuple.get("start_date", Instant.class))
+                        .build()
+                )
+                .collect(Collectors.toList());
     }
 
     private ProjectEntity isProjectExistsById(Long projectId) {

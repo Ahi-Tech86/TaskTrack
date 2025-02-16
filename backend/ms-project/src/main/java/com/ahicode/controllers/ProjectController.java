@@ -16,6 +16,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.WebUtils;
 
+import java.util.List;
+
 @Slf4j
 @Validated
 @RestController
@@ -39,6 +41,14 @@ public class ProjectController {
     @PatchMapping("/{projectId}/update")
     public ResponseEntity<ProjectDto> updateProject(@PathVariable Long projectId, @Valid @RequestBody ProjectUpdateRequestDto requestDto) {
         return ResponseEntity.ok(service.updateProjectInfo(projectId, requestDto));
+    }
+
+    @GetMapping("/projects")
+    public ResponseEntity<List<ProjectDto>> getAllJoinedProjects(HttpServletRequest request) {
+        String accessToken = extractCookieValue(request, "accessToken");
+        Long userId = jwtService.extractUserIdFromAccessToken(accessToken);
+
+        return ResponseEntity.ok(service.getAllProjects(userId));
     }
 
     private String extractCookieValue(HttpServletRequest request, String cookieName) {
