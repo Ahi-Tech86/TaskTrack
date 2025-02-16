@@ -46,6 +46,14 @@ public class ProjectController {
         return ResponseEntity.ok(service.updateProjectInfo(projectId, userId, requestDto));
     }
 
+    @GetMapping("/{projectId}")
+    public ResponseEntity<ProjectDto> getProject(HttpServletRequest request, @PathVariable Long projectId) {
+        String accessToken = extractCookieValue(request, "accessToken");
+        Long userId = jwtService.extractUserIdFromAccessToken(accessToken);
+
+        return ResponseEntity.ok(service.getProject(projectId, userId));
+    }
+
     @GetMapping("/projects")
     public ResponseEntity<List<ProjectDto>> getAllJoinedProjects(HttpServletRequest request) {
         String accessToken = extractCookieValue(request, "accessToken");

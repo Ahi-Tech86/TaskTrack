@@ -10,4 +10,6 @@ public interface ProjectService {
     ProjectDto createProject(ProjectCreationRequestDto requestDto, Long userId, String userNickname);
     ProjectDto updateProjectInfo(Long projectId, Long userId, ProjectUpdateRequestDto requestDto);
     List<ProjectDto> getAllProjects(Long userId);
+    ProjectDto getProject(Long projectId, Long userId);
+    void deleteProject(Long projectId, Long userId);
 }

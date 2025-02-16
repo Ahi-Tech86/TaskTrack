@@ -1,6 +1,5 @@
 package com.ahicode.storage.repositories;
 
-import com.ahicode.dtos.ProjectDto;
 import com.ahicode.storage.entities.ProjectMemberEntity;
 import jakarta.persistence.Tuple;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,5 +24,16 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMemberEnti
                     "WHERE pm.user_id = :userId AND pm.project_id = :projectId"
             , nativeQuery = true
     )
-    ProjectMemberEntity getProjectMemberEntityByProjectIdAndUserId(@Param("userId") Long userId, @Param("projectId") Long projectId);
+    ProjectMemberEntity getProjectMemberEntityByProjectIdAndUserId(
+            @Param("userId") Long userId, @Param("projectId") Long projectId
+    );
+
+    @Query(
+            value = "SELECT p.name, p.description, p.create_at, p.start_date " +
+                    "FROM project_memb AS pm JOIN project AS p " +
+                    "ON pm.project_id = p.id " +
+                    "WHERE pm.user_id = :userId AND pm.project_id = :projectId"
+            , nativeQuery = true
+    )
+    Tuple getProjectByUserIdAndProjectId(@Param("userId") Long userId, @Param("projectId") Long projectId);
 }

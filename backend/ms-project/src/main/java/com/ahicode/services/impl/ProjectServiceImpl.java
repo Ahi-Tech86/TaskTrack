@@ -91,6 +91,18 @@ public class ProjectServiceImpl implements ProjectService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public ProjectDto getProject(Long projectId, Long userId) {
+        Tuple tuple = memberRepository.getProjectByUserIdAndProjectId(userId, projectId);
+
+        return dtoFactory.makeProjectDto(tuple);
+    }
+
+    @Override
+    public void deleteProject(Long projectId, Long userId) {
+        //todo
+    }
+
     private ProjectEntity isProjectExistsById(Long projectId) {
         ProjectEntity project = repository.findById(projectId).orElseThrow(
                 () -> {
