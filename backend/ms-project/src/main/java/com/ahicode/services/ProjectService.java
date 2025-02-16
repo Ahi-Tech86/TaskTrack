@@ -8,6 +8,6 @@ import java.util.List;
 
 public interface ProjectService {
     ProjectDto createProject(ProjectCreationRequestDto requestDto, Long userId, String userNickname);
-    ProjectDto updateProjectInfo(Long projectId, ProjectUpdateRequestDto requestDto);
+    ProjectDto updateProjectInfo(Long projectId, Long userId, ProjectUpdateRequestDto requestDto);
     List<ProjectDto> getAllProjects(Long userId);
 }

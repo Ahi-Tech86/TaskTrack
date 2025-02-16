@@ -53,8 +53,9 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public ProjectDto updateProjectInfo(Long projectId, ProjectUpdateRequestDto requestDto) {
+    public ProjectDto updateProjectInfo(Long projectId, Long userId, ProjectUpdateRequestDto requestDto) {
         ProjectEntity project = isProjectExistsById(projectId);
+        isUserProjectManager(projectId, userId);
 
         if (requestDto.getName() != null) {
             project.setName(requestDto.getName());
@@ -100,5 +101,14 @@ public class ProjectServiceImpl implements ProjectService {
         );
 
         return project;
+    }
+
+    private void isUserProjectManager(Long projectId, Long userId) {
+        ProjectMemberEntity projectMember = memberRepository.getProjectMemberEntityByProjectIdAndUserId(userId, projectId);
+
+        if (!projectMember.getRole().equals(ProjectRole.PROJECT_MANAGER)) {
+            log.error("Attempt to change resource with not sufficient project permissions");
+            throw new AppException("User does not have sufficient permissions", HttpStatus.FORBIDDEN);
+        }
     }
 }

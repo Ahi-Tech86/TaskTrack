@@ -39,8 +39,11 @@ public class ProjectController {
     }
 
     @PatchMapping("/{projectId}/update")
-    public ResponseEntity<ProjectDto> updateProject(@PathVariable Long projectId, @Valid @RequestBody ProjectUpdateRequestDto requestDto) {
-        return ResponseEntity.ok(service.updateProjectInfo(projectId, requestDto));
+    public ResponseEntity<ProjectDto> updateProject(HttpServletRequest request, @PathVariable Long projectId, @Valid @RequestBody ProjectUpdateRequestDto requestDto) {
+        String accessToken = extractCookieValue(request, "accessToken");
+        Long userId = jwtService.extractUserIdFromAccessToken(accessToken);
+
+        return ResponseEntity.ok(service.updateProjectInfo(projectId, userId, requestDto));
     }
 
     @GetMapping("/projects")
