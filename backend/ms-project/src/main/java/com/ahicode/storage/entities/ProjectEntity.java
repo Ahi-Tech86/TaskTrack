@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.Set;
 
 @Entity
@@ -40,5 +41,5 @@ public class ProjectEntity {
     private Instant createAt;
 
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<ProjectMemberEntity> members;
+    private Set<ProjectMemberEntity> members = new HashSet<>();
 }

@@ -100,7 +100,11 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public void deleteProject(Long projectId, Long userId) {
-        //todo
+        isProjectExistsById(projectId);
+        isUserProjectManager(projectId, userId);
+
+        repository.deleteById(projectId);
+        log.info("Project with ID {} was delete", projectId);
     }
 
     private ProjectEntity isProjectExistsById(Long projectId) {

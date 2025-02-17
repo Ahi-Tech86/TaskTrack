@@ -62,6 +62,16 @@ public class ProjectController {
         return ResponseEntity.ok(service.getAllProjects(userId));
     }
 
+    @DeleteMapping("/{projectId}/delete")
+    public ResponseEntity<Void> deleteProject(HttpServletRequest request, @PathVariable Long projectId) {
+        String accessToken = extractCookieValue(request, "accessToken");
+        Long userId = jwtService.extractUserIdFromAccessToken(accessToken);
+
+        service.deleteProject(projectId, userId);
+
+        return ResponseEntity.noContent().build();
+    }
+
     private String extractCookieValue(HttpServletRequest request, String cookieName) {
         Cookie cookie = WebUtils.getCookie(request, cookieName);
 
